@@ -1,0 +1,608 @@
+C51 COMPILER V9.52.0.0   MAIN                                                              01/07/2021 17:15:33 PAGE 1   
+
+
+C51 COMPILER V9.52.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN main.OBJ
+COMPILER INVOKED BY: D:\work_app\Keil\C51\BIN\C51.EXE main.c BROWSE DEBUG OBJECTEXTEND TABS(2)
+
+line level    source
+
+   1          #include <STC89C5xRC.H>
+   2          #include <stdio.h>
+   3          #include <LCD1602.h>
+   4          #define All 6          //歌曲总数
+   5          #define Xtal  11030000
+   6          /* 赋晶振值 */
+   7          #define uchar unsigned char
+   8          typedef unsigned char uint8;
+   9          /* 无符号8位整型变量 */
+  10          typedef signed char int8;
+  11          /* 有符号8位整型变量 */
+  12          typedef unsigned short  uint16;
+  13          /* 无符号16位整型变量 */
+  14          typedef signed short  int16;
+  15          /* 有符号16位整型变量 */
+  16          typedef unsigned int  uint32;
+  17          /* 无符号32位整型变量 */
+  18          typedef signed int  int32;
+  19          /* 有符号32位整型变量 */
+  20          typedef float   fp32;
+  21          /* 单精度浮点数（32位长度） */
+  22          typedef double    fp64;
+  23          /* 双精度浮点数（64位长度） */
+  24          sbit  row1  = P0^0;
+  25          sbit  row2  = P0^1;
+  26          sbit  row3  = P0^2;
+  27          sbit  row4  = P0^3;
+  28          sbit  col1  = P0^4;
+  29          sbit  col2  = P0^5;
+  30          sbit  col3  = P0^6;
+  31          sbit  col4  = P0^7;
+  32          #define uint unsigned int
+  33          uchar STH0;
+  34          /* 定时器0计数初值 */
+  35          uchar STL0;
+  36          uchar T1RH;
+  37          /* 定时器1计数初值 */
+  38          uchar T1RL;
+  39          bit FY    = 0;
+  40          /* 放乐曲时FY=1, 电子琴弹奏时FY=0 */
+  41          uchar k;
+  42          
+  43          
+  44          sbit BUZZ = P3^7;  //蜂鸣器控制引脚
+  45          sbit digTube = P2; //数码管显示控制
+  46          
+  47          unsigned char Num = 1; //第几首歌
+  48          bit enable = 1;   //蜂鸣器发声使能标志
+  49          bit tmrflag = 0;  //定时器中断完成标志
+  50          unsigned char T0RH = 0xFF;  //T0重载值的高字节
+  51          unsigned char T0RL = 0x00;  //T0重载值的低字节
+  52          uint count = 1000;//定时器定时1000次
+  53          unsigned char DispBuf[50];//液晶显示字符缓存区
+  54          bit stopOver=0;
+  55          
+C51 COMPILER V9.52.0.0   MAIN                                                              01/07/2021 17:15:33 PAGE 2   
+
+  56          
+  57          void Delay( uint16 count )
+  58          {
+  59   1        uint8 i;
+  60   1        while ( --count != 0 ) {
+  61   2          for ( i = 0; i < 125; i++ )
+  62   2            ;
+  63   2          /* ";" 表示空语句,CPU空转。 */
+  64   2        }
+  65   1        /* i 从0加到125，在12M晶体下CPU大概耗时1毫秒 */
+  66   1      }
+  67          
+  68          void PlayControl(unsigned char Num);//歌曲选择函数
+  69          void Play();//演奏函数
+  70          
+  71          unsigned char code LedChar[] = {0xC0, 0xF9, 0xA4, 0xB0, 0x99, 0x92, 0x82, 0xF8,0x80, 0x90, 0x88, 0x83, 0xC
+             -6, 0xA1, 0x86, 0x8E};//数码管显示字符转换表
+  72          unsigned int code NoteFrequ[] = {  //中音1-7低音1-7和高音1-7对应频率列表
+  73            523,  587,  659,  698,  784,  880,  988,  //中音1-7
+  74            1047, 1175, 1319, 1397, 1568, 1760, 1976,  //高音1-7
+  75            262, 294, 330, 349, 392, 440, 494,300//低音1-7  最后一个纯属凑数
+  76          };
+  77          unsigned int code NoteReload[] = { //中音1-7和高音1-7对应的定时器重载值
+  78            65536 - (Xtal/12) / (523*2),  //中音1
+  79            65536 - (Xtal/12) / (587*2),  //2
+  80            65536 - (Xtal/12) / (659*2),  //3
+  81            65536 - (Xtal/12) / (698*2),  //4
+  82            65536 - (Xtal/12) / (784*2),  //5
+  83            65536 - (Xtal/12) / (880*2),  //6
+  84            65536 - (Xtal/12) / (988*2),  //7
+  85            65536 - (Xtal/12) / (1047*2), //高音1
+  86            65536 - (Xtal/12) / (1175*2), //2
+  87            65536 - (Xtal/12) / (1319*2), //3
+  88            65536 - (Xtal/12) / (1397*2), //4
+  89            65536 - (Xtal/12) / (1568*2), //5
+  90            65536 - (Xtal/12) / (1760*2), //6
+  91            65536 - (Xtal/12) / (1976*2), //7
+  92            65536 - (Xtal/12) / (262*2), //低音1
+  93            65536 - (Xtal/12) / (294*2), //2
+  94            65536 - (Xtal/12) / (330*2), //3
+  95            65536 - (Xtal/12) / (349*2), //4
+  96            65536 - (Xtal/12) / (392*2), //5
+  97            65536 - (Xtal/12) / (440*2), //6
+  98            65536 - (Xtal/12) / (494*2), //7
+  99            65536 - (Xtal/12) / (300*2), //纯属凑数
+ 100          };
+ 101          
+ 102          unsigned char *SongNote, *SongBeat;//指针
+ 103          unsigned char code XiaoXingXingNote[] = {   //小星星
+ 104            1, 1, 5, 5,    6, 6, 5,    4, 4, 3, 3,    2, 2, 1,
+ 105            5, 5, 4, 4,    3, 3, 2,    5, 5, 4, 4,    3, 3, 2 ,
+ 106            1, 1, 5, 5,    6, 6, 5,    4, 4, 3, 3,    2, 2, 1, 0xff
+ 107          };
+ 108          
+ 109          unsigned char code XiaoXingXingBeat[] = {
+ 110            4, 4, 4, 4,    4, 4, 8,    4, 4, 4, 4,    4, 4, 8,
+ 111            4, 4, 4, 4,    4, 4, 8,    4, 4, 4, 4,    4, 4, 8,
+ 112            4, 4, 4, 4,    4, 4, 8,    4, 4, 4, 4,    4, 4, 8,
+ 113          };
+ 114          unsigned char code TwoTigerNote[] = {    //两只老虎音符表
+ 115            1,   2,   3, 1,    1,   2,   3, 1,   3, 4, 5,   3, 4, 5,
+ 116            5,6, 5,4, 3, 1,    5,6, 5,4, 3, 1,   1, 5, 1,   1, 5, 1,0xff
+C51 COMPILER V9.52.0.0   MAIN                                                              01/07/2021 17:15:33 PAGE 3   
+
+ 117          };
+ 118          
+ 119          unsigned char code TwoTigerBeat[] = {    //两只老虎节拍表，4表示一拍，1就是1/4拍，8就是2拍
+ 120            4,   4,   4, 4,    4,   4,   4, 4,   4, 4, 8,   4, 4, 8,
+ 121            3,1, 3,1, 4, 4,    3,1, 3,1, 4, 4,   4, 4, 8,   4, 4, 8,
+ 122          };
+ 123          unsigned char code HappybirthdayNote[] = {  //生日快乐歌
+ 124            5, 5, 6, 5, 8, 7, 22, 5, 5, 6, 5, 9, 8, 5, 5, 12, 10, 8, 7, 6, 11, 11,  10, 8, 9, 8,0xff
+ 125          };
+ 126          unsigned char code HappybirthdayBeat[] = {
+ 127            2, 2, 4, 4, 4, 4, 4, 2, 2,  4, 4, 4, 8, 2, 2, 4, 4, 4, 4, 8, 2, 2, 4, 4, 4, 8
+ 128          };
+ 129          unsigned char code         ZhiduanqingchangNote[] = { //纸短情长
+ 130            //8, 9, 10, 9, 8, 6, 22, 11, 10, 9, 22, 7, 8, 9, 7, 7, 5, 22, 7, 9, 8, 8, 3, 4, 2, 3, 1, 1, 5, 2,  //前奏
+ 131            19, 3, 3, 3, 2, 3, 1, 2, 2, 2, 1, 2, 5, 1, 1, 1, 20, 1, 20, 19,     2, 2, 2, 3, 20, 19, 4, 4, 4, 3, 4, 1,
+             - 2, 2, 2, 1, 2, 5,
+ 132            1, 1, 1, 20, 1, 20, 3, 2, 2, 1, 1, 22, 22, 22, 1, 1, 2,             3, 3, 3, 22, 3, 2, 1, 21, 6, 5, 22, 5
+             -, 6, 7, 8, 3, 3, 22, 8, 7, 8,
+ 133            7, 3, 5, 5, 6, 8, 5, 6, 22, 6, 5, 4,5, 3, 2, 1, 20, 1,               3, 2, 2, 1, 2, 5, 1, 2, 5, 22, 22, 2
+             -2, 1, 1, 2,
+ 134            3, 3, 2, 3, 22, 3, 2, 1, 5, 5, 3, 5, 22, 5, 6, 7,                   8, 8, 8, 8, 8, 7, 6, 7, 6, 3, 5, 5, 5
+             -, 6, 8, 5, 6, 22, 6, 5, 4,
+ 135            5, 3, 2, 1, 6, 1, 3, 2, 2, 1, 2, 1, 20, 1, 22,                      22, 20, 1, 3, 2, 2, 22, 2, 1, 2, 1, 1
+             -, 22, 20, 1, 1, 0xff
+ 136          };
+ 137          unsigned char code ZhiduanqingchangBeat[] = {
+ 138            //2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 8, 4, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 8, 8, 12, 4, 5, 4, 8, 8, 4,   //前奏
+ 139            8, 2, 2, 2, 2, 2, 5, 2, 2, 2, 2, 2, 5, 2, 2, 2, 2, 2, 4, 2,       2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 4, 5, 2, 
+             -2, 2, 2, 2, 5,
+ 140            2, 2, 2, 2, 2, 5, 2, 2, 2, 2, 8, 4, 4, 2, 2, 2, 2,                4, 2, 2, 2, 2, 2, 2, 4, 2, 2, 2, 2, 2, 
+             -2, 4, 2, 2, 2, 2, 2, 2,
+ 141            4, 2, 5, 2, 2, 2, 4, 2, 2, 2, 2, 2, 2, 4, 2, 5, 1, 1,             2, 2, 2, 2, 2, 4, 2, 16, 16,4, 4, 2, 2,
+             - 2, 2,
+ 142            2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,                   2, 2, 2, 2, 2, 2, 2, 2, 2, 4, 2, 4, 2, 
+             -2, 2, 4, 2, 2, 2, 2, 2,
+ 143            2, 4, 2, 5, 1, 1, 2, 2, 2, 2, 2, 4, 1, 12, 4,                     2, 1, 1, 2, 2, 8, 2, 1, 1, 2, 2, 8, 2, 
+             -2, 12, 16
+ 144          };
+ 145          
+ 146          
+ 147          unsigned char code YiLuXiangBeiNote[] = {   //????
+ 148            22,22,4,4,3,2,1,  2,3,3,22,22,  22,22,4,4,3,2,1,  2,1,1,22,1,2,5,
+ 149            5,1,6,5,5,3,  5,1,6,5,5,3,  3,2,2,6,5,5,3,  3,2,2,22,22,
+ 150            22,22,4,4,3,2,1,  2,3,3,22,22,  22,22,4,4,3,2,1,  2,1,1,22,1,3,7,  7,8,22,8,8,9,8,7,   
+ 151            7,8,22,8,8,9,8,9,  10,9,22,8,8,9,8,9,  10,11,10,9,22,5,5,9,  9,8,8,10,10,9,7,6,  6,5,5,22,5,5,8,
+ 152            8,4,22,8,7,7,8,9,  9,10,10,22,5,5,9,9,8,8,10,10,9,7,6,6,5,5,3,9,9,8,22,5,5,6,1,1,4,3,2,1,1,1,22,5,5,9,1,2
+             -2,5,
+ 153            5,6,1,1,4,3,2,1, 0xff
+ 154          };
+ 155          unsigned char code YiLuXiangBeiBeat[] = {
+ 156            4 ,2 ,2,2,2,2,2,  2,2,4,4 ,4 ,  4 ,2 ,2,2,2,2,2,  2,2,4,2 ,2,2,2,  
+ 157            4,4,2,2,2,2,  4,4,2,2,2,2,  2,2,4,2,2,2,2,  3,1,4,4 ,4 ,  
+ 158            4 ,2 ,2,2,2,2,2,  2,2,4,4 ,4 ,  4 ,2 ,2,2,2,2,2,  3,1,4,2 ,2,2,2,  2,2,2 ,2,2,2,2,2,  
+ 159            2,2,2 ,2,2,2,2,2,  2 ,2,2 ,2,2,2,2,2,  2 ,2 ,2 ,2,2 ,2,2,2,   3,1,2,2 ,2 ,2,2,2,  3,1,4,2,2,2,2,   
+ 160            2,2,2 ,2,2,2,2,2,  3,1 ,4,2,2,2,2,  3,1,2,2,2,2,2,2,  2,2,2,1,1,1,3,2,2,  2,1,1,3,1,2,2,3,1,12,
+ 161            8,2,2,2,2,  10,2,2, 2,2,3,1,2,2,4,  8  
+ 162          };
+ 163          
+ 164          
+ 165          unsigned char code QingTianNote[] = {   //晴天
+ 166             3,3,3,3,2,3,2,1, 19,1,2,3,4,3,2,1,2,  3,3,3,3,2,3,2,1,21,  
+ 167             1,1,1,1,21,1,1,1,1,1,1,21,1,1,  1,1,1,1,21,1,1,1,1,1,1,5,5,5,  22,5,5,5,5,5,5,5,5,5,5,5,5,4,3,3,  3,21,1
+C51 COMPILER V9.52.0.0   MAIN                                                              01/07/2021 17:15:33 PAGE 4   
+
+             -,1,1,1,  20,21,1,5,4,3,1,1,  1,22,1,1,1,1,3,1,  20,21,1,5,4,3,1,2,
+ 168             2,22,22,  3,2,4,3,3,1,5,7,  8,7,5,1,1,1,1,6,6,  22,6,5,5,5,5,4,3,  2,3,4,3,3, 3,4,5,3,3,4,5,7, 9,7,8,8,8
+             -,22,8,  8,5,5,6,5,4,4,2,3,  4,5,6,1,6,7,7,  3,2,4,3,3,1,5,7,
+ 169             8,7,5,1,1,1,1,6,6, 22,6,5,5,5,5,4,3,  2,3,4,3,3, 3,4,5,3,3,4,5,7,  9,7,8,8,8,22,8,8,5,5,6,5,4,20,21,  1,
+             -2,3,2,2,3,1,1, 0xff
+ 170          };
+ 171          
+ 172          
+ 173          unsigned char code QingTianBeat[] = {
+ 174            4,4,4,4,2,2,4,8,4,4,4,4,4,4,4,2,2,4,4,4,4,2,2,4,6,2,2,2,2,2,2,4,2,2,2,2,2,2,4,2,
+ 175            2,2,2,2,2,4,2,2,2,2,2,2,4,2,2,2,2,2,2,4,2,2,2,2,2,2,2,2,2,16,8,2,2,2,2,4,4,4,4,4,4,4,4,8,8,2,2,2,2,4,4,4
+             -,4,4,4,4,4,4,4,16,8,8,                                        
+ 176            4,4,4,4,4,4,4,4,4,4,2,2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,16,4,4,4,4,4,4,4,4,4,4,4,4,8,4,4,4,4,4,4,2,2
+             -,4,4,4,4,4,4,4,6,2,8,4,4,4,4,4,4,4,4,4,4,2,2,4,4,4,4,4,4,    
+ 177            4,4,4,4,4,4,4,4,4,4,4,4,16,4,4,4,4,4,4,4,4,4,4,4,4,8,4,4,4,4,4,4,4,4,4,4,4,4,4,4,8,4,4,                 
+             -                                                           
+ 178          };
+ 179          char* code SongName[]={
+ 180            "    QingTian    ",
+ 181            "  YiLuXiangBei  ",
+ 182            "ZhiDuanQingChang",
+ 183            "  HappyBirthday ",
+ 184            "    TwoTigers   ",
+ 185            "  Little Star   "
+ 186          };
+ 187          
+ 188          uint8 KeyDown( void )
+ 189          {
+ 190   1        col1 = 0;
+ 191   1        col2 = 0;
+ 192   1        col3 = 0;
+ 193   1        col4 = 0;
+ 194   1        /* 列线全部置低 */
+ 195   1        if ( (row1 == 0) || (row2 == 0) || (row3 == 0) || (row4 == 0) )
+ 196   1          /* 若有任一行线读回状态为低 */
+ 197   1        {
+ 198   2          Delay( 10 );
+ 199   2          /* 延时消抖 */
+ 200   2          if ( (row1 == 0) || (row2 == 0) || (row3 == 0) || (row4 == 0) )
+ 201   2            /* 再次读行线状态，若有任一行线读回状态为低 */
+ 202   2            return(1);
+ 203   2          /* 返回1，表明有键盘按下 */ else
+ 204   2            return(0);
+ 205   2          /* 返回0，表明无键盘按下 */
+ 206   2        } else
+ 207   1          return(0);
+ 208   1      }
+ 209          uint8 KeyUp( void )
+ 210          {
+ 211   1        col1 = 0;
+ 212   1        col2 = 0;
+ 213   1        col3 = 0;
+ 214   1        col4 = 0;
+ 215   1        if ( (row1 == 1) && (row2 == 1) && (row3 == 1) && (row4 == 1) ) {
+ 216   2          Delay( 10 );
+ 217   2          if ( (row1 == 1) && (row2 == 1) && (row3 == 1) && (row4 == 1) )
+ 218   2            return(1);
+ 219   2          else
+ 220   2            return(0);
+ 221   2        } else
+ 222   1          return(0);
+ 223   1      }
+C51 COMPILER V9.52.0.0   MAIN                                                              01/07/2021 17:15:33 PAGE 5   
+
+ 224          uint8   KeyNum( void )
+ 225          {
+ 226   1        uint8 KeyTemp;
+ 227   1        KeyTemp = 0;
+ 228   1        if ( KeyDown() == 1 ) {
+ 229   2          col1 = 0;
+ 230   2          col2 = 1;
+ 231   2          col3 = 1;
+ 232   2          col4 = 1;
+ 233   2          /* 将列线1置低，其他列线置高 */
+ 234   2          if ( row1 == 0 )
+ 235   2            KeyTemp = 1;
+ 236   2          /* 若行线1读回状态为低，则表明按键1被按下 */
+ 237   2          if ( row2 == 0 )
+ 238   2            KeyTemp = 5;
+ 239   2          /* 若行线2读回状态为低，则表明按键5被按下 */
+ 240   2          if ( row3 == 0 )
+ 241   2            KeyTemp = 9;
+ 242   2          /* 若行线3读回状态为低，则表明按键9被按下 */
+ 243   2          if ( row4 == 0 )
+ 244   2            KeyTemp = 13;
+ 245   2          /* 若行线3读回状态为低，则表明按键13被按下 */
+ 246   2          col1 = 1;
+ 247   2          col2 = 0;
+ 248   2          col3 = 1;
+ 249   2          col4 = 1;
+ 250   2          if ( row1 == 0 )
+ 251   2            KeyTemp = 2;
+ 252   2          /* 若行线1读回状态为低，则表明按键2被按下 */
+ 253   2          if ( row2 == 0 )
+ 254   2            KeyTemp = 6;
+ 255   2          /* 若行线2读回状态为低，则表明按键6被按下 */
+ 256   2          if ( row3 == 0 )
+ 257   2            KeyTemp = 10;
+ 258   2          /* 若行线3读回状态为低，则表明按键10被按下 */
+ 259   2          if ( row4 == 0 )
+ 260   2            KeyTemp = 14;
+ 261   2          /* 若行线3读回状态为低，则表明按键14被按下 */
+ 262   2          col1 = 1;
+ 263   2          col2 = 1;
+ 264   2          col3 = 0;
+ 265   2          col4 = 1;
+ 266   2          if ( row1 == 0 )
+ 267   2            KeyTemp = 3;
+ 268   2          /* 若行线1读回状态为低，则表明按键1被按下 */
+ 269   2          if ( row2 == 0 )
+ 270   2            KeyTemp = 7;
+ 271   2          /* 若行线2读回状态为低，则表明按键8被按下 */
+ 272   2          if ( row3 == 0 )
+ 273   2            KeyTemp = 11;
+ 274   2          /* 若行线3读回状态为低，则表明按键15被按下 */
+ 275   2          if ( row4 == 0 )
+ 276   2            KeyTemp = 15;
+ 277   2          /* 若行线3读回状态为低，则表明按键15被按下 */
+ 278   2          col1 = 1;
+ 279   2          col2 = 1;
+ 280   2          col3 = 1;
+ 281   2          col4 = 0;
+ 282   2          if ( row1 == 0 )
+ 283   2            KeyTemp = 4;
+ 284   2          /* 若行线1读回状态为低，则表明按键4被按下 */
+ 285   2          if ( row2 == 0 )
+C51 COMPILER V9.52.0.0   MAIN                                                              01/07/2021 17:15:33 PAGE 6   
+
+ 286   2            KeyTemp = 8;
+ 287   2          /* 若行线2读回状态为低，则表明按键8被按下 */
+ 288   2          if ( row3 == 0 )
+ 289   2            KeyTemp = 12;
+ 290   2          /* 若行线3读回状态为低，则表明按键12被按下 */
+ 291   2          if ( row4 == 0 )
+ 292   2            KeyTemp = 16;
+ 293   2          /* 若行线3读回状态为低，则表明按键16被按下 */
+ 294   2          return(KeyTemp);
+ 295   2        } else
+ 296   1          return(0);
+ 297   1        /* 无按键按下 */
+ 298   1      }
+ 299          
+ 300          
+ 301          
+ 302          
+ 303          void PlayControl(unsigned char Num)//歌曲选择函数 
+ 304          {
+ 305   1        switch(Num) {
+ 306   2          case 6:
+ 307   2            SongNote = XiaoXingXingNote;
+ 308   2            SongBeat =  XiaoXingXingBeat;
+ 309   2            //display_tab("  Now Playing     Little Star  ");
+ 310   2            break;
+ 311   2          case 5:
+ 312   2            SongNote = TwoTigerNote;
+ 313   2            SongBeat =TwoTigerBeat;
+ 314   2            //display_tab("  Now Playing      TwoTigers   ");
+ 315   2            break;
+ 316   2          case 4:
+ 317   2            SongNote = HappybirthdayNote;
+ 318   2            SongBeat =HappybirthdayBeat;
+ 319   2            //display_tab("  Now Playing    Happybirthday ");
+ 320   2            break;
+ 321   2          case 3:
+ 322   2            SongNote = ZhiduanqingchangNote;
+ 323   2            SongBeat =ZhiduanqingchangBeat;
+ 324   2            //display_tab("  Now Playing   zhiduanqingchang");
+ 325   2            break;
+ 326   2          case 2:
+ 327   2            SongNote = YiLuXiangBeiNote;
+ 328   2            SongBeat =YiLuXiangBeiBeat;
+ 329   2            break;          
+ 330   2          case 1:
+ 331   2            SongNote = QingTianNote;
+ 332   2            SongBeat = QingTianBeat;
+ 333   2            break;  
+ 334   2          /*case 4:
+ 335   2            SongNote = XiaoXingXingNote;
+ 336   2            SongBeat =  XiaoXingXingBeat;
+ 337   2            //display_tab("  Now Playing     Little Star  ");
+ 338   2            break;
+ 339   2          case 3:
+ 340   2            SongNote = TwoTigerNote;
+ 341   2            SongBeat =TwoTigerBeat;
+ 342   2            //display_tab("  Now Playing      TwoTigers   ");
+ 343   2            break;
+ 344   2          case 2:
+ 345   2            SongNote = HappybirthdayNote;
+ 346   2            SongBeat =HappybirthdayBeat;
+ 347   2            //display_tab("  Now Playing    Happybirthday ");
+C51 COMPILER V9.52.0.0   MAIN                                                              01/07/2021 17:15:33 PAGE 7   
+
+ 348   2            break;
+ 349   2          case 1:
+ 350   2            SongNote = ZhiduanqingchangNote;
+ 351   2            SongBeat =ZhiduanqingchangBeat;
+ 352   2            //display_tab("  Now Playing   zhiduanqingchang");
+ 353   2            break;*/
+ 354   2          default:
+ 355   2            break;
+ 356   2        }
+ 357   1      }
+ 358          
+ 359          /*控制蜂鸣器发声 */
+ 360          void InterruptTimer0() interrupt 1 {
+ 361   1        TH0 = T0RH;   //重新加载重载值
+ 362   1        TL0 = T0RL;
+ 363   1        tmrflag = 1;
+ 364   1        if (enable)   //使能时反转蜂鸣器控制电平
+ 365   1          BUZZ = ~BUZZ;
+ 366   1        else          //未使能时关闭蜂鸣器
+ 367   1          BUZZ = 1;
+ 368   1      }
+ 369          /*通过定时器1暂停*/
+ 370          
+ 371          void CountDown(uint8 s){
+ 372   1        sprintf(DispBuf,"   Count Down    %2d second left ",(unsigned int)s);
+ 373   1        display_tab(DispBuf);
+ 374   1      }
+ 375          
+ 376          void InterruptTimer1() interrupt 3 { 
+ 377   1        TH1 = T1RH;
+ 378   1        TL1 = T1RL;
+ 379   1        count--;
+ 380   1        FY=0;
+ 381   1        if(!count) {
+ 382   2          TR1=0;
+ 383   2          FY=1;
+ 384   2          enable = 1;
+ 385   2          TR0 = 1;
+ 386   2          stopOver=1;
+ 387   2          //displaySong();
+ 388   2        }
+ 389   1      
+ 390   1      }
+ 391          
+ 392          void displaySong(void){
+ 393   1        k=Num-1;
+ 394   1        sprintf(DispBuf,"  Now Playing   %s",SongName[k]);
+ 395   1        display_tab(DispBuf);
+ 396   1      }
+ 397          
+ 398          void main()
+ 399          {
+ 400   1        unsigned char beat;   //当前节拍索引
+ 401   1        unsigned char note;   //当前节拍对应的音符
+ 402   1        unsigned int time = 0;      //当前节拍计时
+ 403   1        unsigned int beatTime = 0;  //当前节拍总时间
+ 404   1        unsigned int soundTime = 0; //当前节拍需发声时间
+ 405   1        enable = 0;
+ 406   1        EA = 1;       //使能全局中断
+ 407   1        TMOD = 0x11;  //配置T0，T1工作在模式1
+ 408   1        TH0 = T0RH;
+ 409   1        TL0 = T0RL;
+C51 COMPILER V9.52.0.0   MAIN                                                              01/07/2021 17:15:33 PAGE 8   
+
+ 410   1        ET0 = 1;      //使能T0中断
+ 411   1        ET1 = 1;      //使能T1中断
+ 412   1        TR1=0;        //关闭T1
+ 413   1        FY=1;   //开始放歌模式 
+ 414   1        TR0 = 1;  //启动T0 
+ 415   1        P2=0xFF;  // 数码管a-h位清零 ，本试验台数码管为共阳极 
+ 416   1        Intlcd();
+ 417   1        display_tab("Electronic Piano     Group 3    ");
+ 418   1        Delay(3000);
+ 419   1        PlayControl(Num);
+ 420   1        Num=1;
+ 421   1        displaySong();
+ 422   1        //sprintf(DispBuf,"  Now Playing   %s",SongName[Num-1]);
+ 423   1        //display_tab(DispBuf);
+ 424   1        enable = 1;
+ 425   1        while ( 1 ) {
+ 426   2          if ( KeyDown() ) {
+ 427   3            k = KeyNum();
+ 428   3            /* 调用键盘扫描函数 */
+ 429   3            if ( k != 0 ) {
+ 430   4              FY = 0; //改为电子琴模式 
+ 431   4              //P2 = LedChar[k]; //数码管置位
+ 432   4              if(k<=13){ 
+ 433   5              T0RH = NoteReload[k] >> 8; 
+ 434   5              T0RL = NoteReload[k];
+ 435   5              /*蜂鸣器振动频率控制*/ 
+ 436   5              
+ 437   5              T1RH  = 0xEC;
+ 438   5              T1RL  = 0x78;
+ 439   5              /*T1定时5ms*/
+ 440   5              
+ 441   5              TR0 = 1; //开T0
+ 442   5              TR1 = 0; //关T1
+ 443   5              count=1000;
+ 444   5              /* 开始计数 */
+ 445   5              sprintf(DispBuf,"    Key Down        Key = %2d    ",(unsigned int)k);
+ 446   5              display_tab(DispBuf);
+ 447   5              enable = 1;
+ 448   5              
+ 449   5              while ( KeyUp() == 0 );
+ 450   5              /* 若没有松开按键，则等待，等待期间弹奏该音符 */
+ 451   5              enable = 0;
+ 452   5              TR0 = 0;
+ 453   5              /* 若按键松开，则停止计数，不产生脉冲输出 */
+ 454   5              TR1=1;//开始计时5s
+ 455   5              }else if(k==14){
+ 456   5                while ( KeyUp() == 0 );
+ 457   5      
+ 458   5                display_tab("Electronic Piano    Pausing     ");
+ 459   5                enable = ~enable;
+ 460   5                if(enable){
+ 461   6                    FY=1;
+ 462   6                    displaySong();
+ 463   6                  }
+ 464   5                //FY=~FY;
+ 465   5              }else if(k>=15){
+ 466   5                if(k==15){
+ 467   6                  while ( KeyUp() == 0 );
+ 468   6                if(Num == All)
+ 469   6                  Num = 1;
+ 470   6                else
+ 471   6                  Num++;
+C51 COMPILER V9.52.0.0   MAIN                                                              01/07/2021 17:15:33 PAGE 9   
+
+ 472   6                
+ 473   6              }else{
+ 474   6              while ( KeyUp() == 0 );
+ 475   6                if(Num == 1)
+ 476   6                  Num = All;
+ 477   6                else
+ 478   6                  Num--;
+ 479   6                }
+ 480   5                PlayControl(Num);
+ 481   5                beat=0;
+ 482   5                time = 0;      
+ 483   5                beatTime = 0; 
+ 484   5                soundTime = 0; 
+ 485   5                Delay(100);
+ 486   5                displaySong();
+ 487   5                FY=1; 
+ 488   5                continue; 
+ 489   5              }
+ 490   4            }
+ 491   3          } else {
+ 492   3            if(stopOver){
+ 493   4              displaySong();
+ 494   4              stopOver=0;
+ 495   4            }
+ 496   3            if(TR1){
+ 497   4              if(count==800) CountDown(4);
+ 498   4              else if(count==600) CountDown(3);
+ 499   4              else if(count==400) CountDown(2);
+ 500   4              else if(count==200) CountDown(1);   
+ 501   4            }
+ 502   3            if(FY==1) {/* 演奏函数 */
+ 503   4              //P2 = LedChar[Num]; //数码管显示当前歌曲序号
+ 504   4              while (!tmrflag);  //每次定时器中断完成后，检测并处理节拍
+ 505   4                  tmrflag = 0;
+ 506   4              if (time == 0) { //当前节拍播完则启动一个新节拍
+ 507   5                note = SongNote[beat] - 1;
+ 508   5                if(note == 0xfe) {
+ 509   6                  if(Num == All)
+ 510   6                    Num = 1;
+ 511   6                  else
+ 512   6                    Num++;
+ 513   6                  PlayControl(Num);
+ 514   6                  beat=0;
+ 515   6                  time = 0;      
+ 516   6                  beatTime = 0; 
+ 517   6                  soundTime = 0; 
+ 518   6                  Delay(100);
+ 519   6                  displaySong();
+ 520   6                  continue; 
+ 521   6                }
+ 522   5                
+ 523   5                T0RH = NoteReload[note] >> 8;
+ 524   5                T0RL = NoteReload[note];
+ 525   5                
+ 526   5                beatTime = (SongBeat[beat] * NoteFrequ[note]) >> 2;//计算节拍总时间，右移2位相当于除4，移位代替除法可
+             -以加快执行速度
+ 527   5                soundTime = beatTime - (beatTime >> 2);//计算发声时间，
+ 528   5                enable = 1;  //指示蜂鸣器开始发声
+ 529   5                if (note == 21)//简谱的0 等待
+ 530   5                  enable =0;
+ 531   5                time++;
+ 532   5              } else { //当前节拍未播完则处理当前节拍
+C51 COMPILER V9.52.0.0   MAIN                                                              01/07/2021 17:15:33 PAGE 10  
+
+ 533   5                if (time >= beatTime) { //当前持续时间到达节拍总时间时归零，
+ 534   6                  //并递增节拍索引，以准备启动新节拍
+ 535   6                  time = 0;
+ 536   6                  beat++;
+ 537   6                } else { //当前持续时间未达到总时间时，
+ 538   6                  time++;   //累加时间计数
+ 539   6                  if (time == soundTime) { //到达发声时间后，指示关闭蜂鸣器，
+ 540   7                    //插入0.25*总时间的静音间隔，
+ 541   7                    enable = 0;         //用以区分连续的两个节拍
+ 542   7                  }
+ 543   6                }
+ 544   5              } 
+ 545   4            }
+ 546   3          }
+ 547   2        }
+ 548   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1124    ----
+   CONSTANT SIZE    =   1748    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     66       8
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      4    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
