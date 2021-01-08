@@ -8,7 +8,7 @@ First, scan the matrix keyboard continuously. If no key is pressed, enter the oc
 首先对矩阵键盘进行持续扫描，如果没有按键按下，则进入八音盒程序，通过蜂鸣器进行播放，程序会通过置位定时器的初始值来控制蜂鸣器的音调，之后按照预先定义好的音调和节拍进行播放，当播放完一个音调之后再播放下一个音调。在预先定义好的音调表中定义结束符，如果监测到结束了，就播放下一曲。如果在播放的过程中，有按键按下，则进入电子琴程序，用户可以进行自行弹奏。在按键按下的过程中，置位定时器的初始值来控制蜂鸣器的音调，具体置位的音调要根据按下的按键进行决定。如果用户不再按下，则开始计时，当达到5秒后，重新回到八音盒程序。同时按下定义的特殊按键，可以实现上一首下一首，暂停等功能。以上是根据系统应具备的功能，提出的整体设计思路。
 
 # File directory / 文件目录
-
+```
 main
 ├─ 1602sound
 │    ├─ ExtDll.iex
@@ -33,3 +33,4 @@ main
 │    ├─ main_uvopt.bak
 │    └─ main_uvproj.bak
 └─ shixun.DSN <- Protues simulation circuit diagram / Protues 仿真电路图
+```
